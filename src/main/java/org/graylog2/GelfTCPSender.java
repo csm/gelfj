@@ -6,10 +6,12 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GelfTCPSender implements GelfSender {
-	private boolean shutdown = false;
+	private volatile boolean shutdown = false;
 	private String host;
 	private InetAddress[] hosts;
 	private int hostIndex;
@@ -17,19 +19,39 @@ public class GelfTCPSender implements GelfSender {
 	private SocketChannel channel;
 	private long lastLookupTime;
 	private int errorMessages = 5;
+    private final LinkedBlockingQueue<GelfMessage> messageQueue;
+    private Thread consumerThread;
 
 	public GelfTCPSender() {
+        messageQueue = new LinkedBlockingQueue<GelfMessage>(512);
 	}
 
 	public GelfTCPSender(String host, int port) throws IOException {
+        this();
 		this.host = host;
 		this.port = port;
 		lookup();
 		connect();
+        consumerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (!shutdown) {
+                    try {
+                        GelfMessage msg = messageQueue.poll(1, TimeUnit.MINUTES);
+                        if (msg != null)
+                            sendMessageWithRetry(msg, true);
+                    }
+                    catch (InterruptedException e) {
+                    }
+                }
+            }
+        }, "GelfTCPSenderConsumer");
+        consumerThread.setDaemon(true);
+        consumerThread.start();
 	}
 
 	public boolean sendMessage(GelfMessage message) {
-		return sendMessageWithRetry(message, true);
+        return messageQueue.offer(message);
 	}
 
 	private boolean sendMessageWithRetry(GelfMessage message, boolean retry) {

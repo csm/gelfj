@@ -8,7 +8,7 @@ I've changed the following from [upstream](https://github.com/t0xa/gelfj):
 
 * Use `SocketChannel` in favor of `Socket` and `OutputStream` to send messages via TCP. Fail if sending the entire message fails.
 * Use `InetAddress.getAllByName` and round-robin through the answers (ELBs in AWS can have multiple IP addresses).
-* Look up the hostname after 60 seconds (AWS recommends a 60 second TTL for host lookups). Note that Java may cache DNS lookups like an idiot; check your installation.
+* Look up the hostname again after 60 seconds (AWS recommends a 60 second TTL for host lookups). Note that Java may cache DNS lookups like an idiot; check your installation.
 * Retry sending a message once, since we may need to reconnect.
 * Spew a little more debug output to stderr, but not too much.
 

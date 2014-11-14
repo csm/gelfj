@@ -49,7 +49,7 @@ public class GelfTCPSender implements GelfSender {
 			}
 
 			// reconnect if necessary
-			if (channel == null || channel.isConnected()) {
+			if (channel == null || !channel.isConnected()) {
 				connect();
 			}
 

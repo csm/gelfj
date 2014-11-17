@@ -64,14 +64,20 @@ public class GelfTCPSender implements GelfSender {
 		}
 
 		try {
-			// Look up the DNS name again, if > 60 seconds.
+			// Look up the DNS name again.
 			if (System.currentTimeMillis() - lastLookupTime > TimeUnit.MILLISECONDS.convert(60, TimeUnit.SECONDS)) {
 				lookup();
-				connect();
 			}
 
 			// reconnect if necessary
 			if (channel == null || !channel.isConnected()) {
+                if (channel != null) {
+                    try {
+                        channel.close();
+                    } catch (IOException ioe) {
+                        // ignore
+                    }
+                }
 				connect();
 			}
 

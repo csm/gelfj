@@ -1,5 +1,6 @@
 package org.graylog2;
 
+import com.google.common.base.Optional;
 import org.json.simple.JSONValue;
 
 import java.io.ByteArrayOutputStream;
@@ -12,7 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.GZIPOutputStream;
 
-public class GelfMessage {
+public class GelfMessage implements Comparable<GelfMessage> {
 
     private static final String ID_NAME = "id";
     private static final String GELF_VERSION = "1.1";
@@ -27,6 +28,7 @@ public class GelfMessage {
     private String fullMessage;
     private long javaTimestamp;
     private String level;
+    private Optional<Integer> integerLevel = Optional.absent();
     private String facility = "gelf-java";
     private String line;
     private String file;
@@ -46,6 +48,11 @@ public class GelfMessage {
         this.level = level;
         this.line = line;
         this.file = file;
+    }
+
+    public GelfMessage(String shortMessage, String fullMessage, long timestamp, int level, String line, String file) {
+        this(shortMessage, fullMessage, timestamp, String.valueOf(level), line, file);
+        this.integerLevel = Optional.of(level);
     }
 
     public String toJson() {
@@ -299,5 +306,25 @@ public class GelfMessage {
         byte[] result = Arrays.copyOf(first, first.length + second.length);
         System.arraycopy(second, 0, result, first.length, second.length);
         return result;
+    }
+
+    @Override
+    public int compareTo(GelfMessage o) {
+        // First, check levels.
+        if (integerLevel.isPresent() && o.integerLevel.isPresent()) {
+            int cmp = integerLevel.get().compareTo(o.integerLevel.get());
+            if (cmp != 0)
+                return cmp;
+        } else {
+            try {
+                int cmp = new Integer(level).compareTo(new Integer(o.level));
+                if (cmp != 0)
+                    return cmp;
+            } catch (NumberFormatException nfe) {
+                // pass
+            }
+        }
+        // Then just sort by time.
+        return Long.valueOf(javaTimestamp).compareTo(o.javaTimestamp);
     }
 }

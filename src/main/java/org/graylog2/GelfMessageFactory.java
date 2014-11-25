@@ -55,7 +55,7 @@ public class GelfMessageFactory {
         }
 
         GelfMessage gelfMessage = new GelfMessage(shortMessage, renderedMessage, timeStamp,
-                String.valueOf(level.getSyslogEquivalent()), lineNumber, file);
+                level.getSyslogEquivalent(), lineNumber, file);
 
         if (provider.getOriginHost() != null) {
             gelfMessage.setHost(provider.getOriginHost());

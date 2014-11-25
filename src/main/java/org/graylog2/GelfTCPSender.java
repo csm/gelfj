@@ -6,9 +6,15 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.security.Security;
+import java.util.Comparator;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.common.collect.MinMaxPriorityQueue;
 
 public class GelfTCPSender implements GelfSender {
 	private volatile boolean shutdown = false;
@@ -19,11 +25,21 @@ public class GelfTCPSender implements GelfSender {
 	private SocketChannel channel;
 	private long lastLookupTime;
 	private int errorMessages = 5;
-    private final LinkedBlockingQueue<GelfMessage> messageQueue;
+    private final MinMaxPriorityQueue<GelfMessage> messageQueue;
+    private final Lock queueLock;
+    private final Condition queueCondition;
     private Thread consumerThread;
 
 	public GelfTCPSender() {
-        messageQueue = new LinkedBlockingQueue<GelfMessage>(512);
+        messageQueue = MinMaxPriorityQueue
+                .orderedBy(new Comparator<GelfMessage>() {
+                    @Override
+                    public int compare(GelfMessage o1, GelfMessage o2) {
+                        return o1.compareTo(o2);
+                    }
+                }).maximumSize(512).create();
+        queueLock = new ReentrantLock();
+        queueCondition = queueLock.newCondition();
 	}
 
 	public GelfTCPSender(String host, int port) throws IOException {
@@ -36,13 +52,21 @@ public class GelfTCPSender implements GelfSender {
             @Override
             public void run() {
                 while (!shutdown) {
+                    GelfMessage msg = null;
+                    queueLock.lock();
                     try {
-                        GelfMessage msg = messageQueue.poll(1, TimeUnit.MINUTES);
-                        if (msg != null)
-                            sendMessageWithRetry(msg, true);
+                        if (messageQueue.isEmpty())
+                            queueCondition.await(1, TimeUnit.MINUTES);
+                        msg = messageQueue.poll();
                     }
                     catch (InterruptedException e) {
+                        // pass
                     }
+                    finally {
+                        queueLock.unlock();
+                    }
+                    if (msg != null)
+                        sendMessageWithRetry(msg, true);
                 }
             }
         }, "GelfTCPSenderConsumer");
@@ -51,7 +75,15 @@ public class GelfTCPSender implements GelfSender {
 	}
 
 	public boolean sendMessage(GelfMessage message) {
-        return messageQueue.offer(message);
+        queueLock.lock();
+        try {
+            boolean result = messageQueue.offer(message);
+            if (result)
+                queueCondition.signal();
+            return result;
+        } finally {
+            queueLock.unlock();
+        }
 	}
 
 	private boolean sendMessageWithRetry(GelfMessage message, boolean retry) {

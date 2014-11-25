@@ -89,4 +89,20 @@ public class GelfMessageTest {
 
         assertThat("Message with invalid level defaults to info", (Long) object.get("level"), is(6L));
     }
+
+    @Test
+    public void testMessageComparison() {
+        GelfMessage infoMessage = new GelfMessage("short", "long", 1L, 6);
+        GelfMessage warnMessage = new GelfMessage("short", "long", 2L, 4);
+        assertThat("Message with lower level sorts first", (long) infoMessage.compareTo(warnMessage), is(1L));
+
+        GelfMessage warnMessage2 = new GelfMessage("short", "long", 3L, 4);
+        assertThat("Message with lower timestamp sorts first", (long) warnMessage.compareTo(warnMessage2), is(-1L));
+
+        GelfMessage infoMessage2 = new GelfMessage("short", "long", 1L, "6");
+        assertThat("Message created with string level sorts correctly", (long) infoMessage.compareTo(infoMessage2), is(0L));
+
+        GelfMessage warnMessage3 = new GelfMessage("short", "long", Long.MIN_VALUE, 4);
+        assertThat("Message timestamps compared unsigned", (long) warnMessage.compareTo(warnMessage3), is(-1L));
+    }
 }

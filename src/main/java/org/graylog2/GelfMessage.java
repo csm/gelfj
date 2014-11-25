@@ -41,6 +41,10 @@ public class GelfMessage implements Comparable<GelfMessage> {
         this(shortMessage, fullMessage, timestamp, level, null, null);
     }
 
+    public GelfMessage(String shortMessage, String fullMessage, long timestamp, int level) {
+        this(shortMessage, fullMessage, timestamp, level, null, null);
+    }
+
     public GelfMessage(String shortMessage, String fullMessage, long timestamp, String level, String line, String file) {
         this.shortMessage = shortMessage;
         this.fullMessage = fullMessage;

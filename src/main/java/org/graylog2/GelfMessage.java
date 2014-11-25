@@ -308,6 +308,19 @@ public class GelfMessage implements Comparable<GelfMessage> {
         return result;
     }
 
+    private static int cmpl(long a, long b) {
+        long mask = 0xffffffffL;
+        long ua = (a >> 32) & mask;
+        long ub = (b >> 32) & mask;
+        if (ua < ub) return -1;
+        if (ua > ub) return 1;
+        long la = a & mask;
+        long lb = b & mask;
+        if (la < lb) return -1;
+        if (la > lb) return 1;
+        return 0;
+    }
+
     @Override
     public int compareTo(GelfMessage o) {
         // First, check levels.
@@ -325,6 +338,6 @@ public class GelfMessage implements Comparable<GelfMessage> {
             }
         }
         // Then just sort by time.
-        return Long.valueOf(javaTimestamp).compareTo(o.javaTimestamp);
+        return cmpl(javaTimestamp, o.javaTimestamp);
     }
 }

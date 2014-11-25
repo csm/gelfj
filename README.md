@@ -11,6 +11,8 @@ I've changed the following from [upstream](https://github.com/t0xa/gelfj):
 * Look up the hostname again after 60 seconds (AWS recommends a 60 second TTL for host lookups). Note that Java may cache DNS lookups like an idiot; check your installation.
 * Retry sending a message once, since we may need to reconnect.
 * Spew a little more debug output to stderr, but not too much.
+* Use a queue for TCP messages, because it's stupid to have a blocking network write in your logging path.
+    * Note a more recent commit tries out a bounded priority queue, which should prioritize messages with a higher severity (which means a lower integer log level). This priority queue implementation isn't well tested yet.
 
 Downloading
 -----------

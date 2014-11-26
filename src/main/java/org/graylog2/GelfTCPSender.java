@@ -46,7 +46,7 @@ public class GelfTCPSender implements GelfSender {
                     try {
                         msg = messageQueue.pollFirst();
                         if (msg == null) {
-                            queueCondition.await(1, TimeUnit.MINUTES);
+                            queueCondition.await(1, TimeUnit.SECONDS);
                             msg = messageQueue.pollFirst();
                         }
                     } catch (InterruptedException e) {
@@ -66,6 +66,11 @@ public class GelfTCPSender implements GelfSender {
 	public boolean sendMessage(GelfMessage message) {
         messageQueue.add(message);
         boolean added = true;
+
+        // Note that this is only approximate: size() might change, and we might have
+        // concurrent threads adding and removing items here. But, at worst, we may remove
+        // items from the tail of the queue that we didn't need to, OR we will lie and say
+        // we added an item when we in fact rejected it.
         if (messageQueue.size() >= MAX_QUEUE)
             added = messageQueue.pollLast() == message;
         if (queueLock.tryLock()) {

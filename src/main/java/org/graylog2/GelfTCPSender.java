@@ -1,23 +1,18 @@
 package org.graylog2;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.security.Security;
-import java.util.Comparator;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import com.google.common.collect.MinMaxPriorityQueue;
-
 public class GelfTCPSender implements GelfSender {
-	private volatile boolean shutdown = false;
+    public static final int MAX_QUEUE = 512;
+    private volatile boolean shutdown = false;
 	private String host;
 	private InetAddress[] hosts;
 	private int hostIndex;
@@ -25,19 +20,13 @@ public class GelfTCPSender implements GelfSender {
 	private SocketChannel channel;
 	private long lastLookupTime;
 	private int errorMessages = 5;
-    private final MinMaxPriorityQueue<GelfMessage> messageQueue;
+    private final ConcurrentSkipListSet<GelfMessage> messageQueue;
     private final Lock queueLock;
     private final Condition queueCondition;
     private Thread consumerThread;
 
 	public GelfTCPSender() {
-        messageQueue = MinMaxPriorityQueue
-                .orderedBy(new Comparator<GelfMessage>() {
-                    @Override
-                    public int compare(GelfMessage o1, GelfMessage o2) {
-                        return o1.compareTo(o2);
-                    }
-                }).maximumSize(512).create();
+        messageQueue = new ConcurrentSkipListSet<GelfMessage>();
         queueLock = new ReentrantLock();
         queueCondition = queueLock.newCondition();
 	}
@@ -55,14 +44,14 @@ public class GelfTCPSender implements GelfSender {
                     GelfMessage msg = null;
                     queueLock.lock();
                     try {
-                        if (messageQueue.isEmpty())
+                        msg = messageQueue.pollFirst();
+                        if (msg == null) {
                             queueCondition.await(1, TimeUnit.MINUTES);
-                        msg = messageQueue.poll();
-                    }
-                    catch (InterruptedException e) {
+                            msg = messageQueue.pollFirst();
+                        }
+                    } catch (InterruptedException e) {
                         // pass
-                    }
-                    finally {
+                    } finally {
                         queueLock.unlock();
                     }
                     if (msg != null)
@@ -75,15 +64,18 @@ public class GelfTCPSender implements GelfSender {
 	}
 
 	public boolean sendMessage(GelfMessage message) {
-        queueLock.lock();
-        try {
-            boolean result = messageQueue.offer(message);
-            if (result)
-                queueCondition.signal();
-            return result;
-        } finally {
-            queueLock.unlock();
+        messageQueue.add(message);
+        boolean added = true;
+        if (messageQueue.size() >= MAX_QUEUE)
+            added = messageQueue.pollLast() == message;
+        if (queueLock.tryLock()) {
+            try {
+                queueCondition.signalAll();
+            } finally {
+                queueLock.unlock();
+            }
         }
+        return added;
 	}
 
 	private boolean sendMessageWithRetry(GelfMessage message, boolean retry) {

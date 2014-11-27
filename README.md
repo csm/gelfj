@@ -14,6 +14,13 @@ I've changed the following from [upstream](https://github.com/t0xa/gelfj):
 * Use a queue for TCP messages, because it's stupid to have a blocking network write in your logging path.
     * Note a more recent commit tries out a bounded priority queue, which should prioritize messages with a higher severity (which means a lower integer log level). This priority queue implementation isn't well tested yet.
 
+I did some investigation into various queue implementations:
+
+* Just using `LinkedBlockingQueue` works great, especially in the many-producers-one-consumer case, but we really want to prioritize more severe messages.
+* If we add an upper bound to `PriorityBlockingQueue`, we actually get a *lot* of items rejected, especially as the number of producers increases.
+* `ConcurrentSkipListSet` lends itself well to this, though it is an approximation (you might think you've enqueued an item when it was actually dropped, or you might drop more messages than you need to). This is the implementation I'm trying, though again, it isn't well tested yet.
+* Guava's `MinMaxPriorityQueue` works well too, but it requires explicit locking. Since I have many, many writers, I don't really want them all bogged down contending for a single lock, even if that lock is only used very, very briefly.
+
 Downloading
 -----------
 

@@ -123,7 +123,7 @@ public class GelfTCPSender implements GelfSender {
 			if (errorMessages > 0) {
 				System.err.printf("failed sending message");
 				e.printStackTrace();
-				errorMessages++;
+				errorMessages--Fix;
 			}
 			try {
 				channel.close();
